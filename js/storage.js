@@ -8,54 +8,27 @@
 const SAVE_KEY = "draftboard.v1";
 const CFG_KEY  = "draftboard.league.v1";   // settings, kept away from draft state
 const PROJ_KEY = "draftboard.projections.v1";
-const PROJ_SOURCE_KEY = "draftboard.projectionSource.v1";
-const PROJ_VERSION_KEY = "draftboard.projectionVersion.v1";
+const poolSig = () => pool.length + "|" + (pool[0] ? pool[0].name : "");
 
-// Include names, ordering AND data. A count/first-player signature cannot
-// distinguish sequential releases of the same top-400 projection pool.
-const poolSig = () => {
-  let hash = 2166136261;
-  for(const p of pool){
-    const line = [p.name,p.team,p.gp,p.adp,p.fgm,p.fga,p.ftm,p.fta,
-      p.tpm,p.pts,p.reb,p.ast,p.stl,p.blk,p.to].join("|");
-    for(let i=0;i<line.length;i++){
-      hash ^= line.charCodeAt(i);
-      hash = Math.imul(hash,16777619);
-    }
-  }
-  return pool.length + "|" + (hash>>>0).toString(16);
-};
-
-// Fresh default projections are read directly from RAW on each visit.
-// Legacy saved projection text is classified as custom unless it exactly
-// matches RAW; this avoids silently deleting an intentional import.
-function currentProjectionText(){
-  const saved = loadProjectionText();
-  let source = null;
-  try{ source = localStorage.getItem(PROJ_SOURCE_KEY); }catch(e){}
-  if(source === "custom") return saved;
-  if(source === "bundled") return "";
-  if(!saved || saved.trim() === RAW.trim()){
-    try{ localStorage.setItem(PROJ_SOURCE_KEY,"bundled"); }catch(e){}
-    return "";
-  }
-  // Old versions didn't tag imports. Retain the data rather than risk loss.
-  try{ localStorage.setItem(PROJ_SOURCE_KEY,"custom"); }catch(e){}
-  return saved;
+function normalizeCfgAfterLoad(){
+  if(!cfg || !cfg.catW) return;
+  // Treat HTML min/max as presentation only. Persisted or manually edited values
+  // are clamped here as well so an old/bad localStorage value cannot create an
+  // enormous draft structure on startup.
+  cfg.teams = Math.min(MAX_TEAMS, Math.max(MIN_TEAMS, Math.trunc(Number(cfg.teams) || 12)));
+  cfg.slot = Math.min(cfg.teams, Math.max(1, Math.trunc(Number(cfg.slot) || 1)));
+  cfg.size = Math.min(MAX_ROSTER_SPOTS, Math.max(MIN_ROSTER_SPOTS, Math.trunc(Number(cfg.size) || 13)));
+  // Migrate v1 count objects and normalize v2 ordered slot arrays.
+  // Roster spots remains authoritative; the slot list is always forced to match it.
+  cfg.rosterSlots = sanitizeRosterSlotList(cfg.rosterSlots, cfg.size);
+  if(!Array.isArray(cfg.names)) cfg.names = [];
+  else cfg.names = cfg.names.slice(0, cfg.teams);
+  // Migrate the old default TO weight back to the current standard 9-cat default.
+  if(cfg.catW.to === 0.75) cfg.catW.to = 1;
 }
-function markBundledProjection(){
-  try{
-    localStorage.setItem(PROJ_SOURCE_KEY,"bundled");
-    localStorage.setItem(PROJ_VERSION_KEY, PROJECTION_DATASET_META.updated);
-  }catch(e){}
-}
-
 
 function saveProjectionText(text){
-  try{
-    localStorage.setItem(PROJ_KEY, text);
-    localStorage.setItem(PROJ_SOURCE_KEY, "custom");
-  }catch(e){}
+  try{ localStorage.setItem(PROJ_KEY, text); }catch(e){}
 }
 
 function loadProjectionText(){
@@ -65,7 +38,6 @@ function loadProjectionText(){
 function clearProjectionText(){
   try{
     localStorage.removeItem(PROJ_KEY);
-    markBundledProjection();
     return true;
   }catch(e){
     return false;
@@ -106,6 +78,7 @@ function loadSettings(){
     const d = JSON.parse(localStorage.getItem(CFG_KEY) || "null");
     if(!d) return false;
     if(d.cfg) Object.assign(cfg, d.cfg);
+    normalizeCfgAfterLoad();
     if(typeof d.shape === "number") shape = d.shape;
     if(d.theme) document.body.dataset.theme = d.theme;
     if(d.ui) pendingUI = d.ui;      // applied once the elements exist
@@ -143,13 +116,7 @@ function saveState(){
   saveSettings();
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      sig: poolSig(),
-      picks: picks.map(pk => {
-        const p = pk.playerId === null || pk.playerId === undefined
-          ? null : pool.find(x => x.id === pk.playerId);
-        return {...pk, playerName: p ? p.name : (pk.unknownName || null)};
-      }),
-      locks, ledgerTeam
+      sig: poolSig(), picks, locks, ledgerTeam
     }));
   }catch(e){ /* private browsing, quota, file:// restrictions — not worth failing over */ }
 }
@@ -161,33 +128,11 @@ function loadState(){
     const d = JSON.parse(raw);
     // Legacy blobs carried settings too; honour them once so nobody loses a setup.
     if(d.cfg) Object.assign(cfg, d.cfg);
+    normalizeCfgAfterLoad();
     if(typeof d.shape === "number") shape = d.shape;
     if(d.theme) document.body.dataset.theme = d.theme;
-    if(!Array.isArray(d.picks)) return false;
-    if(d.sig === poolSig()){
-      picks = d.picks;
-    } else {
-      // Only remap picks with an explicitly saved name. Legacy index-only
-      // picks are not safe to remap after a dataset change.
-      if(d.picks.some(pk => pk.playerId != null && !pk.playerName)) return false;
-      const byName = new Map();
-      for(const player of pool){
-        const key = nameKey(player.name);
-        if(!byName.has(key)) byName.set(key, player);
-        else byName.set(key, null); // ambiguous names must not match
-      }
-      const migrated = [];
-      for(const pk of d.picks){
-        if(pk.playerId == null){ migrated.push(pk); continue; }
-        const matched = byName.get(nameKey(pk.playerName || ""));
-        // Preserve draft integrity; don't silently lose or substitute picks.
-        if(!matched) return false;
-        migrated.push({...pk, playerId:matched.id});
-      }
-      picks = migrated;
-      // Persist migrated IDs against the new dataset signature.
-      saveState();
-    }
+    if(d.sig !== poolSig()) return false;      // different data loaded; keep settings, drop picks
+    if(Array.isArray(d.picks)) picks = d.picks;
     if(d.locks && typeof d.locks === "object") locks = d.locks;
     ledgerTeam = (typeof d.ledgerTeam === "number") ? d.ledgerTeam : null;
     return picks.length > 0;

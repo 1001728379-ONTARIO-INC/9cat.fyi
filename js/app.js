@@ -1,17 +1,20 @@
 "use strict";
 
+const MIN_TEAMS = 4;
+const MAX_TEAMS = 24;
+const MIN_ROSTER_SPOTS = 5;
+const MAX_ROSTER_SPOTS = 20;
+
 let cfg = {
   teams:12, slot:5, size:13, aggr:5, k:7, gpw:0.5, scarcity:1.2,
   /*  Per-category weight, to match your league's scoring. 1 = counts normally,
       0 = not scored at all (8-cat leagues drop turnovers entirely). This is a
       LEAGUE SETTING, not a strategy — punting is separate and per-roster.    */
-  /*  Turnovers ship at 0.75 rather than 1.0. Every rostered team finishes
-      underwater in TO, so a category-league turnover loss is partly priced in
-      already, and full weight pushed high-usage guards further down the board
-      than the market will ever let you exploit. Set it back to 1 in Setup if
-      your league scores all nine equally — that's the stricter reading.      */
-  catW: {fg:1, ft:1, tpm:1, pts:1, reb:1, ast:1, stl:1, blk:1, to:0.75},
-  names: []            // optional league team names, indexed by draft slot
+  /*  Standard 9-cat now weights turnovers at 1.0 again. Use 0 only for
+      8-cat leagues, or adjust manually if your league has custom scoring.   */
+  catW: {fg:1, ft:1, tpm:1, pts:1, reb:1, ast:1, stl:1, blk:1, to:1},
+  names: [],           // optional league team names, indexed by draft slot
+  rosterSlots:null     // null = default; array = custom position for each roster spot
 };
 const teamName = i => (cfg.names[i] && cfg.names[i].trim()) || ("Team " + (i+1));
 const shortName = i => { const n = teamName(i); return n.length > 9 ? n.slice(0,8) + "\u2026" : n; };
@@ -245,8 +248,15 @@ document.addEventListener("keydown", e=>{
 // Settings
 function paintNameGrid(){
   // Preview the values currently entered in the modal without mutating the saved setup.
-  const teams = Math.max(4, +$("#s_teams").value || cfg.teams);
-  const slot = Math.min(teams, Math.max(1, +$("#s_slot").value || cfg.slot));
+  // Clamp the upper bound BEFORE allocating the team-name grid: type=number's
+  // max attribute does not stop someone from manually typing a huge value.
+  const teamsInput = $("#s_teams");
+  const rawTeams = Number(teamsInput.value);
+  if(Number.isFinite(rawTeams) && rawTeams > MAX_TEAMS) teamsInput.value = MAX_TEAMS;
+  const teams = Math.min(MAX_TEAMS, Math.max(MIN_TEAMS, +teamsInput.value || cfg.teams));
+  const slotInput = $("#s_slot");
+  slotInput.max = String(teams);
+  const slot = Math.min(teams, Math.max(1, +slotInput.value || cfg.slot));
   $("#s_names").innerHTML = Array.from({length: teams}, (_,i)=>
     `<div class="fld"><label>${i+1 === slot ? "You \u00b7 slot " + (i+1) : "Slot " + (i+1)}</label>
      <input type="text" data-n="${i}" maxlength="18" placeholder="Team ${i+1}"
@@ -259,16 +269,82 @@ function paintCatGrid(){
     `<div class="fld"><label>${c.label}</label>
      <input type="number" data-w="${c.k}" min="0" max="3" step="0.25" value="${cw(c.k)}"></div>`).join("");
 }
+
+let setupRosterCustom = false;
+let setupRosterSlots = null;
+
+function rosterSetupHint(){
+  return setupRosterCustom ? "Custom" : "Default";
+}
+
+function rosterSlotOptions(selected){
+  return ROSTER_SLOT_KEYS.map(k=>
+    `<option value="${k}"${k===selected?" selected":""}>${k}</option>`
+  ).join("");
+}
+
+function currentSetupRosterSize(){
+  return Math.min(MAX_ROSTER_SPOTS,
+    Math.max(MIN_ROSTER_SPOTS, Math.trunc(Number($("#s_size").value)||cfg.size||13)));
+}
+
+function paintRosterSlotGrid(){
+  const el = $("#s_roster_slots");
+  if(!el) return;
+
+  const size = currentSetupRosterSize();
+  const defaults = defaultRosterSlots(size);
+
+  if(!Array.isArray(setupRosterSlots)){
+    setupRosterSlots = defaults.slice();
+  }else{
+    setupRosterSlots = setupRosterSlots.slice(0,size);
+    while(setupRosterSlots.length < size){
+      setupRosterSlots.push(defaults[setupRosterSlots.length] || "BN");
+    }
+  }
+
+  el.innerHTML = setupRosterSlots.map((slot,i)=>`
+    <div class="roster-slot-picker">
+      <label for="s_rslot_${i}">Slot ${i+1}</label>
+      <select id="s_rslot_${i}" data-rslot-index="${i}">
+        ${rosterSlotOptions(slot)}
+      </select>
+    </div>
+  `).join("");
+
+  $("#s_roster_hint").textContent = rosterSetupHint();
+  const msg = $("#s_roster_msg");
+  msg.textContent = `${size} roster spot${size===1?"":"s"} · ${setupRosterCustom ? "custom positions" : "Yahoo-style default"}`;
+}
+
+function readSetupRosterSlots(){
+  return [...$("#s_roster_slots").querySelectorAll("select[data-rslot-index]")]
+    .map(el=>ROSTER_SLOT_KEYS.includes(el.value) ? el.value : "UTIL");
+}
+
+function resetSetupRosterToDefault(){
+  setupRosterCustom = false;
+  setupRosterSlots = defaultRosterSlots(currentSetupRosterSize());
+  paintRosterSlotGrid();
+}
 let firstRun = false;
 
 function openSet(){
   $("#s_teams").value = cfg.teams; $("#s_slot").value = cfg.slot;
   $("#s_size").value = cfg.size;   $("#s_aggr").value = cfg.aggr;
+  setupRosterCustom = rosterPositionsCustomized();
+  setupRosterSlots = setupRosterCustom
+    ? sanitizeRosterSlotList(cfg.rosterSlots, cfg.size)
+    : defaultRosterSlots(cfg.size);
   paintCatGrid();
   paintNameGrid();
+  paintRosterSlotGrid();
   $("#s_intro").style.display = firstRun ? "" : "none";
   const catDetails = $("#catweightsdetails");
   if(catDetails) catDetails.open = false;
+  const rosterDetails = $("#rosterpositionsdetails");
+  if(rosterDetails) rosterDetails.open = false;
   $("#s_save").textContent = firstRun ? "Save and continue" : (picks.length ? "Save and reset picks" : "Save setup");
   $("#setmask").classList.add("on");
   setTimeout(()=>{ const f = $("#s_teams"); if(f && f.focus){ f.focus(); if(f.select) f.select(); } }, 30);
@@ -323,7 +399,8 @@ document.addEventListener("keydown", e=>{
 
 document.addEventListener("keydown", e=>{
   if(e.key !== "Escape") return;
-  const open = ["#setmask","#impmask","#helpmask"].map($).filter(m=>m && m.classList.contains("on"));
+  // League Setup is intentionally non-dismissible: it only closes via Save or Cancel.
+  const open = ["#impmask","#helpmask"].map($).filter(m=>m && m.classList.contains("on"));
   if(open.length){ open.forEach(m=>m.classList.remove("on")); e.stopPropagation(); }
 });
 
@@ -376,22 +453,72 @@ applySplit(splitFrac);
 })();
 $("#helpmask").addEventListener("click", e=>{ if(e.target === $("#helpmask")) $("#helpmask").classList.remove("on"); });
 
-// Close the setup modal when the user clicks the backdrop,
-// but keep clicks inside the modal itself from dismissing it.
-$("#setmask").addEventListener("click", e=>{
-  if(e.target === e.currentTarget) e.currentTarget.classList.remove("on");
+// League Setup is intentionally non-dismissible from the backdrop.
+// Capture backdrop clicks before any generic modal-dismiss handler can see them.
+// Save Setup / Save and Continue and Cancel are the only ways to close it.
+const setupMask = $("#setmask");
+setupMask?.addEventListener("click", e=>{
+  if(e.target !== setupMask) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+
+document.addEventListener("click", e=>{
+  const btn = e.target.closest?.(".setup-num-btn");
+  if(!btn) return;
+  const input = document.getElementById(btn.dataset.stepTarget);
+  if(!input || input.readOnly) return;
+  const dir = Number(btn.dataset.stepDir) || 1;
+  try{ dir > 0 ? input.stepUp() : input.stepDown(); }
+  catch(_e){ return; }
+  input.dispatchEvent(new Event("input", {bubbles:true}));
+  input.focus();
 });
+
 $("#s_teams").addEventListener("input", paintNameGrid);
 $("#s_slot").addEventListener("input", paintNameGrid);
+$("#s_size").addEventListener("input", ()=>{
+  const size = currentSetupRosterSize();
+  if(setupRosterCustom){
+    const defaults = defaultRosterSlots(size);
+    setupRosterSlots = (setupRosterSlots || []).slice(0,size);
+    while(setupRosterSlots.length < size){
+      setupRosterSlots.push(defaults[setupRosterSlots.length] || "BN");
+    }
+  }else{
+    setupRosterSlots = defaultRosterSlots(size);
+  }
+  paintRosterSlotGrid();
+});
+$("#s_roster_slots").addEventListener("change", e=>{
+  if(!e.target.matches("select[data-rslot-index]")) return;
+  setupRosterCustom = true;
+  setupRosterSlots = readSetupRosterSlots();
+  $("#s_roster_hint").textContent = "Custom";
+  $("#s_roster_msg").textContent = `${setupRosterSlots.length} roster spots · custom positions`;
+});
+$("#s_roster_default").onclick = resetSetupRosterToDefault;
 $("#s_cats_std").onclick = ()=> setCatPreset({});
 $("#s_cats_8").onclick = ()=> setCatPreset({to:0});
 $("#s_save").onclick = ()=>{
-  const oldStructure = {teams:cfg.teams, slot:cfg.slot, size:cfg.size};
-  cfg.teams = Math.max(4, +$("#s_teams").value || 12);
+  const oldStructure = {
+    teams:cfg.teams, slot:cfg.slot, size:cfg.size,
+    rosterSlots:JSON.stringify(cfg.rosterSlots || null)
+  };
+
+  cfg.teams = Math.min(MAX_TEAMS, Math.max(MIN_TEAMS, +$("#s_teams").value || 12));
   cfg.slot  = Math.min(cfg.teams, Math.max(1, +$("#s_slot").value || 1));
-  cfg.size  = Math.max(5, +$("#s_size").value || 13);
+  cfg.size  = Math.min(MAX_ROSTER_SPOTS, Math.max(MIN_ROSTER_SPOTS, +$("#s_size").value || 13));
+  setupRosterSlots = readSetupRosterSlots();
+  cfg.rosterSlots = setupRosterCustom
+    ? sanitizeRosterSlotList(setupRosterSlots, cfg.size)
+    : null;
   cfg.aggr  = Math.max(0, Math.min(10, +$("#s_aggr").value));
-  const structureChanged = oldStructure.teams !== cfg.teams || oldStructure.slot !== cfg.slot || oldStructure.size !== cfg.size;
+  const structureChanged =
+    oldStructure.teams !== cfg.teams ||
+    oldStructure.slot !== cfg.slot ||
+    oldStructure.size !== cfg.size ||
+    oldStructure.rosterSlots !== JSON.stringify(cfg.rosterSlots || null);
   cfg.names = [];
   [...$("#s_names").querySelectorAll("input[data-n]")].forEach(el=>{
     cfg.names[+el.dataset.n] = el.value.trim();
@@ -412,7 +539,7 @@ $("#s_save").onclick = ()=>{
   if(resetDraft){
     picks = []; locks = {}; hoverId = null; selectedId = null; armedDraftId = null;
     rosterInspectId = null; ledgerTeam = null; recMessageCleared = false;
-    ui.gapHidden = ""; ui.sugHidden.clear(); clearState(); $("#q").value = "";
+    ui.gapHidden = ""; ui.sugHidden.clear(); clearState(); window.ninecatResetDraftAnalytics?.(); $("#q").value = "";
   } else {
     picks = picks.filter(p => p.overall < cfg.teams * cfg.size);
     reindex();
@@ -490,8 +617,8 @@ function syncProjectionRestoreButton(){
 
   if(note){
     note.textContent = customActive
-      ? "Switch back to nineCat's built-in current bundled projection pool. Draft picks reset; league settings and starred players stay."
-      : "The default current bundled projection pool is already active.";
+      ? "Switch back to nineCat's built-in 500-player projection pool. Draft picks reset; league settings and starred players stay."
+      : "The default 500-player projection pool is already active.";
   }
 }
 
@@ -517,6 +644,7 @@ $("#imp_restore").onclick = ()=>{
   // Picks are tied to pool ids/signatures, so restoring the built-in pool is
   // deliberately a fresh draft. League settings and stars use separate keys.
   clearState();
+  window.ninecatResetDraftAnalytics?.();
   $("#impmask").classList.remove("on");
   setTimeout(()=> window.location.reload(), 100);
 };
@@ -563,6 +691,8 @@ $("#imp_go").onclick = ()=>{
 
   /* ---- this season's projections: replace the pool ---- */
   saveProjectionText(csvText);
+  window.ninecatResetDraftAnalytics?.();
+  window.ninecatTrackAfterReload?.("projection_imported", {player_count: rows.length});
   pool = rows; picks = []; locks = {};
   scoreBoth(pool);
 
@@ -797,6 +927,7 @@ function reconcileYahooBuffer(){
     teamIdx:teamOnClock(i),
     overall:i
   }));
+  window.ninecatTrackDraftProgress?.(window.__ninecatDraftProvider || "yahoo", picks.length, cfg.teams * cfg.size);
 
   selectedId = null;
   hoverId = null;
@@ -835,7 +966,7 @@ function resetYahooSyncedDraft(){
   // intentionally survive this reset.
   saveState();
   render();
-  setYahooSyncStatus("Yahoo · waiting", "dim");
+  setYahooSyncStatus("Draft Sync · waiting", "dim");
   announceNinecatState();
 }
 
@@ -864,7 +995,7 @@ function applyYahooDraftPick(raw){
     yahooAck("duplicate", p.name, "Player is already in the 9cat pick log");
     return true;
   }
-  draft(p.id);
+  draft(p.id, "yahoo");
   setYahooSyncStatus(`Yahoo · synced ${picks.length}`, "ok");
   yahooAck("applied", p.name, `Logged as pick ${picks.length}`);
   announceNinecatState();
@@ -880,17 +1011,23 @@ window.addEventListener("message", e=>{
   if(d.type === "YAHOO_RESET_CAPTURE") yahooPickBuffer.clear();
   if(d.type === "YAHOO_RESET_DRAFT") resetYahooSyncedDraft();
   if(d.type === "YAHOO_STATUS"){
-    if(d.enabled === false) setYahooSyncStatus("Yahoo · paused", "warn");
-    else if(d.yahooConnected){
+    const provider = d.provider === "espn" ? "espn" : "yahoo";
+    const label = provider === "espn" ? "ESPN" : "Yahoo";
+    const connected = d.draftConnected ?? (provider === "espn" ? d.espnConnected : d.yahooConnected);
+    window.__ninecatDraftProvider = provider;
+
+    if(d.enabled === false) setYahooSyncStatus(`${label} · paused`, "warn");
+    else if(connected){
+      window.ninecatTrackOnceSession?.(`draft_sync_connected_${provider}`, "draft_sync_connected", {provider});
       const contiguous = +d.contiguousCount || 0;
       const captured = +d.capturedCount || 0;
       if(captured > contiguous){
-        setYahooSyncStatus(`Yahoo · waiting for #${contiguous + 1} · ${captured} seen`, "warn");
+        setYahooSyncStatus(`${label} · waiting for #${contiguous + 1} · ${captured} seen`, "warn");
       } else {
         const n = contiguous || captured || 0;
-        setYahooSyncStatus(`Yahoo · live${n ? ` ${n}` : ""}`, "ok");
+        setYahooSyncStatus(`${label} · live${n ? ` ${n}` : ""}`, "ok");
       }
-    } else setYahooSyncStatus("Yahoo · waiting", "dim");
+    } else setYahooSyncStatus("Draft Sync · waiting", "dim");
   }
 });
 
@@ -900,8 +1037,7 @@ document.addEventListener("visibilitychange", ()=>{
 setTimeout(announceNinecatState, 0);
 
 // Boot
-const savedProjectionText = currentProjectionText();
-if(!savedProjectionText) markBundledProjection();
+const savedProjectionText = loadProjectionText();
 /*  Settings must load BEFORE scoring. cfg.gpw feeds straight into scoreBoth, so
     scoring first meant every refresh silently used the default games-played
     weight and threw away the saved one — the slider snapping back was the
