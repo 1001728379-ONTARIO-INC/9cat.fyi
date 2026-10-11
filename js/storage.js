@@ -8,7 +8,23 @@
 const SAVE_KEY = "draftboard.v1";
 const CFG_KEY  = "draftboard.league.v1";   // settings, kept away from draft state
 const PROJ_KEY = "draftboard.projections.v1";
-const poolSig = () => pool.length + "|" + (pool[0] ? pool[0].name : "");
+/* Draft picks use projection-array indices. A new bundle can retain the same
+   player count and first name while reordering every other player.
+   Fingerprint the ordered names to prevent restoring picks onto wrong players.
+   Legacy signatures intentionally fail closed rather than relabeling picks. */
+const poolSig = () => {
+  let hash = 2166136261;
+  for(const player of pool){
+    const name = String(player.name || "");
+    for(let i=0;i<name.length;i++){
+      hash ^= name.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    hash ^= 10;
+    hash = Math.imul(hash, 16777619);
+  }
+  return "names-v2|" + pool.length + "|" + (hash >>> 0).toString(16);
+};
 
 function normalizeCfgAfterLoad(){
   if(!cfg || !cfg.catW) return;

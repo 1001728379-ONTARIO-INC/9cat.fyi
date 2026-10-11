@@ -617,8 +617,8 @@ function syncProjectionRestoreButton(){
 
   if(note){
     note.textContent = customActive
-      ? "Switch back to nineCat's built-in 500-player projection pool. Draft picks reset; league settings and starred players stay."
-      : "The default 500-player projection pool is already active.";
+      ? "Switch back to nineCat's built-in 400-player projection pool. Draft picks reset; league settings and starred players stay."
+      : "The default 400-player projection pool is already active.";
   }
 }
 
