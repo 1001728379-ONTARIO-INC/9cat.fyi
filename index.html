@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=roster-slots-v2">
+<link rel="stylesheet" href="styles.css?v=extension-link-reset-fix2">
 </head>
 <body data-theme="arena">
 
@@ -22,7 +22,7 @@
       <button id="b_set">League setup</button>
       <button id="b_imp">Load projections</button>
       <button id="b_help">Quick start</button>
-      <a id="ext_store_link" href="https://chromewebstore.google.com/detail/ninecat-draft-sync/eigbepgkcbocjpoogdklpckigealbjkc" target="_blank" rel="noopener noreferrer">Get Draft Sync ↗</a>
+      <a id="ext_store_link" href="https://chromewebstore.google.com/detail/ninecat-draft-sync/eigbepgkcbocjpoogdklpckigealbjkc" target="_blank" rel="noopener noreferrer">Get Yahoo Draft Sync ↗</a>
       <button id="theme">Light / dark mode</button>
       <button id="reset" style="color:var(--hot)">Reset draft</button>
     </div>
@@ -63,9 +63,9 @@
       <thead>
         <tr>
           <th class="l" data-s="name">Player<span class="arw">▾</span></th>
-          <th data-s="fit" title="Total, adjusted for your roster + availability.">Fit<span class="arw">▾</span></th>
-          <th data-s="rank" title="Overall rank by Total — where the player ranks based on projected value.">#<span class="arw">▾</span></th>
-          <th data-s="adp" title="Average Draft Position — where the player is being drafted by the market.">ADP<span class="arw">▾</span></th>
+          <th data-s="fit" title="Total, adjusted for your roster and availability. Fit is re-centered as the draft moves: 0 is the median Fit among roughly the best two rounds of players still available. Positive is better than a typical current option.">Fit<span class="arw">▾</span></th>
+          <th data-s="rank" title="Rank by Total across the whole pool — our own ordering, not the projection source&#39;s. Compare with ADP to see who the market is under- or over-drafting.">#<span class="arw">▾</span></th>
+          <th data-s="adp" title="Average draft position — where the market is taking him, regardless of what the projections say.">ADP<span class="arw">▾</span></th>
           <th data-s="total" title="Add up the nine category numbers to the right and you get this. It's the player in a vacuum — total production, before anything about your roster. Switch the view to Z-scores to see the columns add up.">Total<span class="arw">▾</span></th>
           <th data-s="fg">FG%<span class="arw">▾</span></th>
           <th data-s="ft">FT%<span class="arw">▾</span></th>
@@ -122,7 +122,7 @@
       <div class="ledger-key" id="ledgerkey"></div>
     </div>
 
-    <div class="head"><h2>Punt Radar</h2><span class="note">Click a category to punt. Double-click to chase.</span></div>
+    <div class="head"><h2>Punt Radar</h2><span class="note">Click a ledger label to punt by hand</span></div>
     <div id="suggest"></div>
 
     <div class="head"><h2 id="rosterhead">My Roster</h2><span class="note" id="rostercount"></span></div>
@@ -143,30 +143,18 @@
     <h3>League setup</h3>
     <div id="s_intro" class="intro" style="display:none">
       <span class="onboard-step">First-time setup</span>
-      <b>Set your league size and draft slot.</b>
+      <b>Set your league size and draft slot.</b> Those two settings determine the snake order and when your next pick comes back around.
       <span class="onboard-sub">nineCat includes a 500-player 2026–27 projection pool, so you can draft immediately. You can replace it anytime in Settings → Load projections.</span>
     </div>
+    <p>Snake order is derived from these. Change them before the draft starts.</p>
     <div class="grid2">
-      <div class="fld"><label>Teams</label><div class="setup-num"><input type="number" id="s_teams" min="4" max="24"><span class="setup-num-controls" aria-hidden="false"><button type="button" class="setup-num-btn" data-step-target="s_teams" data-step-dir="1" aria-label="Increase teams">▲</button><button type="button" class="setup-num-btn" data-step-target="s_teams" data-step-dir="-1" aria-label="Decrease teams">▼</button></span></div></div>
-      <div class="fld"><label>Your draft slot</label><div class="setup-num"><input type="number" id="s_slot" min="1" max="24"><span class="setup-num-controls" aria-hidden="false"><button type="button" class="setup-num-btn" data-step-target="s_slot" data-step-dir="1" aria-label="Increase draft slot">▲</button><button type="button" class="setup-num-btn" data-step-target="s_slot" data-step-dir="-1" aria-label="Decrease draft slot">▼</button></span></div></div>
-      <div class="fld"><label>Roster spots</label><div class="setup-num"><input type="number" id="s_size" min="5" max="20"><span class="setup-num-controls" aria-hidden="false"><button type="button" class="setup-num-btn" data-step-target="s_size" data-step-dir="1" aria-label="Increase roster spots">▲</button><button type="button" class="setup-num-btn" data-step-target="s_size" data-step-dir="-1" aria-label="Decrease roster spots">▼</button></span></div></div>
-      <div class="fld"><label>Punt aggression (0–10)</label><div class="setup-num"><input type="number" id="s_aggr" min="0" max="10" step="1"><span class="setup-num-controls" aria-hidden="false"><button type="button" class="setup-num-btn" data-step-target="s_aggr" data-step-dir="1" aria-label="Increase punt aggression">▲</button><button type="button" class="setup-num-btn" data-step-target="s_aggr" data-step-dir="-1" aria-label="Decrease punt aggression">▼</button></span></div></div>
+      <div class="fld"><label>Teams</label><input type="number" id="s_teams" min="4" max="20"></div>
+      <div class="fld"><label>Your draft slot</label><input type="number" id="s_slot" min="1" max="20"></div>
+      <div class="fld"><label>Roster spots</label><input type="number" id="s_size" min="5" max="20"></div>
+      <div class="fld"><label>Punt aggression (0–10)</label><input type="number" id="s_aggr" min="0" max="10" step="1"></div>
     </div>
-    <p style="margin-bottom:16px"><b style="color:var(--chalk)">Punt aggression</b> controls how quickly the engine recommends punting a category. <b style="color:var(--chalk)">0</b> means it will never recommend a punt; <b style="color:var(--chalk)">10</b> means it will recommend one as soon as a category starts to slip. <b style="color:var(--chalk)">5</b> is a balanced default.</p>
-
-    <details class="setup-details" id="rosterpositionsdetails">
-      <summary>
-        <span>Roster positions</span>
-        <span class="setup-details-hint" id="s_roster_hint">Standard Yahoo-style</span>
-      </summary>
-      <div class="setup-details-body">
-        <p>Roster positions always match the <b style="color:var(--chalk)">Roster spots</b> number above. nineCat starts with Yahoo-style defaults, but you can change any individual slot.</p>
-        <div class="roster-slot-grid" id="s_roster_slots"></div>
-        <div class="roster-slot-status" id="s_roster_msg"></div>
-        <button class="mini" id="s_roster_default" type="button" style="display:inline-block">Reset to Default</button>
-      </div>
-    </details>
-    <h3 class="modal-subhead">Team names <span class="subhead-optional">optional</span></h3>
+    <p style="margin-bottom:16px"><b style="color:var(--chalk)">Punt aggression</b> is how readily the engine writes a category off. <b style="color:var(--chalk)">0</b> keeps chasing all nine to the end; <b style="color:var(--chalk)">10</b> abandons a losing category the moment it slips. <b style="color:var(--chalk)">5</b> is a sane default.</p>
+    <h3 style="margin-top:20px">Team names <span style="font-weight:400;font-size:11px;color:var(--dimmer);text-transform:none;letter-spacing:0">optional</span></h3>
     <p>Leave blank for "Team 1", "Team 2" and so on. Your own slot is highlighted.</p>
     <div class="namegrid" id="s_names"></div>
 
@@ -177,7 +165,8 @@
       </summary>
       <div class="setup-details-body">
         <p>Match your league's scoring. <b style="color:var(--chalk)">1</b> = counts normally,
-           <b style="color:var(--chalk)">0</b> = not scored at all.</p>
+           <b style="color:var(--chalk)">0</b> = not scored at all. This is a league setting —
+           punting a category you're losing is a separate, per-roster choice.</p>
         <div class="catgrid" id="s_cats"></div>
         <div style="margin:10px 0 2px">
           <button class="mini" id="s_cats_std" style="display:inline-block;margin-right:6px">Standard 9-cat</button>
@@ -203,7 +192,7 @@
         <span class="quickstart-num">1</span>
         <div>
           <b>Draft your players</b>
-          <p><b>Total</b> is a player's projected value. <b>Fit</b> adjusts that for your roster and gives extra weight to players unlikely to make it back to your next pick. </p>
+          <p><b>Total</b> is a player's projected value. <b>Fit</b> adjusts that for your roster and gives extra weight to players unlikely to make it back to your next pick. Fit is relative to the current board: positive means better than a typical option available now.</p>
         </div>
       </div>
       <div class="quickstart-card">
@@ -223,9 +212,9 @@
       <div class="quickstart-card">
         <span class="quickstart-num">4</span>
         <div>
-          <b>Yahoo + ESPN sync is optional</b>
-          <p>If you use the nineCat Chrome extension, completed Yahoo or ESPN draft picks can be logged automatically. Manual drafting works normally without the extension.</p>
-          <a class="btn extension-install" id="quickstart_ext_link" href="https://chromewebstore.google.com/detail/ninecat-draft-sync/eigbepgkcbocjpoogdklpckigealbjkc" target="_blank" rel="noopener noreferrer">Install Draft Sync ↗</a>
+          <b>Yahoo sync is optional</b>
+          <p>If you use the nineCat Chrome extension, completed Yahoo draft picks can be logged automatically. Manual drafting works normally without the extension.</p>
+          <a class="btn extension-install" id="quickstart_ext_link" href="https://chromewebstore.google.com/detail/ninecat-draft-sync/eigbepgkcbocjpoogdklpckigealbjkc" target="_blank" rel="noopener noreferrer">Install Yahoo Draft Sync ↗</a>
         </div>
       </div>
     </div>
@@ -236,59 +225,6 @@
 
     <div class="quickstart-actions">
       <button class="btn primary" id="help_close">Start drafting</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ DRAFT SHARE MODAL ============ -->
-<div class="mask" id="sharemask">
-  <div class="modal share-modal" role="dialog" aria-modal="true" aria-labelledby="share_title">
-    <div class="share-modal-head">
-      <div>
-        <span class="share-eyebrow">Draft complete</span>
-        <h3 id="share_title">Share your nineCat draft</h3>
-      </div>
-      <button class="px share-x" id="share_close" type="button" aria-label="Close share card">×</button>
-    </div>
-    <p class="share-lede">Here’s how your roster projects against the rest of your league.</p>
-
-    <div class="share-card" id="share_card" aria-label="Draft share card preview">
-      <div class="share-card-brand">
-        <div class="share-brand-lockup"><span>NINECAT</span><b>MY DRAFT</b></div>
-        <small id="share_meta"></small>
-      </div>
-
-      <div class="share-card-hero">
-        <div class="share-grade-block">
-          <span>DRAFT GRADE</span>
-          <strong id="share_grade">—</strong>
-        </div>
-        <div class="share-result-block">
-          <span>PROJECTED WIN RATE</span>
-          <strong id="share_winrate">—</strong>
-          <small id="share_record">—</small>
-        </div>
-      </div>
-
-      <div class="share-card-sections">
-        <div class="share-section strong"><b>STRONG</b><div id="share_strong"></div></div>
-        <div class="share-section weak"><b>WEAK</b><div id="share_weak"></div></div>
-        <div class="share-section punt"><b>PUNT</b><div id="share_punts"></div></div>
-      </div>
-
-      <div class="share-roster">
-        <b>YOUR ROSTER</b>
-        <div id="share_roster"></div>
-      </div>
-
-      <div class="share-card-foot"><span>Think you can draft better?</span><b>9cat.fyi</b></div>
-    </div>
-
-    <div class="share-actions">
-      <button class="btn primary" id="share_copy" type="button">Copy share</button>
-      <button class="btn" id="share_download" type="button">Download card</button>
-      <button class="btn" type="button" onclick="document.getElementById('sharemask').classList.remove('on')">Close</button>
-      <button class="btn danger" id="share_close_reset" type="button" onclick="window.ninecatCloseAndResetDraftShare?.()">Close and reset draft</button>
     </div>
   </div>
 </div>
@@ -314,7 +250,7 @@
       </div>
       <div class="schema-label">Required header</div>
       <code class="schema-code">PLAYER,ADP,POS,TEAM,GP,MPG,FGM,FGA,FTM,FTA,3PM,PTS,REB,AST,STL,BLK,TO</code>
-      <p class="import-note"><b>PLAYER</b> should use a recognizable player name for reliable draft sync. <b>POS</b> uses values such as PG, SG/SF or PF/C. ADP, GP and MPG may be blank; every stat column is required.</p>
+      <p class="import-note"><b>PLAYER</b> should use the Yahoo display name for reliable draft sync. <b>POS</b> uses values such as PG, SG/SF or PF/C. ADP, GP and MPG may be blank; every stat column is required.</p>
     </div>
 
     <input id="impfile" type="file" accept=".csv,text/csv" hidden>
@@ -359,25 +295,23 @@
       <button class="btn" id="imp_close">Cancel</button>
     </div>
     <div id="imp_restore_note" style="font-size:10px;color:var(--dimmer);margin-top:7px">
-      Switch back to nineCat's built-in 500-player projection pool. Draft picks reset; league settings and starred players stay.
+      Switch back to nineCat's current bundled projection pool. Draft picks reset; league settings and starred players stay.
     </div>
   </div>
 </div>
 
-<script src="js/analytics.js?v=espn-sync-1"></script>
 <script src="js/scoring.js"></script>
-<script src="data/projections-2026-27.js?v=yahoo-20260827"></script>
+<script src="data/projections-2026-27.js?v=20261011"></script>
 <script src="data/actuals-2025-26.js"></script>
 <script src="data/player-name-rules.js"></script>
 <script src="js/projections.js"></script>
-<script src="js/matchup.js?v=gp-season-totals-1"></script>
-<script src="js/roster.js?v=roster-slots-v2"></script>
-<script src="js/draft.js?v=ga4-minimal-1"></script>
+<script src="js/matchup.js"></script>
+<script src="js/roster.js"></script>
+<script src="js/draft.js"></script>
 <script src="js/punts.js"></script>
-<script src="js/recommendations.js?v=roster-positions-v1"></script>
-<script src="js/storage.js?v=roster-slots-v2"></script>
-<script src="js/ui.js?v=roster-positions-v1"></script>
-<script src="js/share.js?v=share-close-reset-clickfix-1"></script>
-<script src="js/app.js?v=roster-slots-v2"></script>
+<script src="js/recommendations.js?v=fit-market"></script>
+<script src="js/storage.js?v=20261011-cachefix"></script>
+<script src="js/ui.js?v=fit-market"></script>
+<script src="js/app.js?v=20261011-cachefix"></script>
 </body>
 </html>
