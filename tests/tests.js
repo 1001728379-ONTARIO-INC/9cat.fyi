@@ -832,11 +832,11 @@ function registerTests(w){
     }
   });
 
-  test("Bundled current-season projection dataset parses to the expected 500-player Yahoo pool", ()=>{
+  test("Bundled current-season projection dataset parses to the expected 400-player Yahoo pool", ()=>{
     const rows = w.eval("dedupe(parsePool(RAW))");
-    equal(rows.length, 500, "Bundled Yahoo projection pool size changed unexpectedly");
-    equal(rows[0].name, "Victor Wembanyama");
-    equal(rows[rows.length-1].name, "Nate Williams");
+    equal(rows.length, 400, "Bundled Yahoo projection pool size changed unexpectedly");
+    equal(rows[0].name, "Nikola Jokic");
+    equal(rows[rows.length-1].name, "Julian Phillips");
   });
 
   test("Bundled historical actuals dataset is present and substantial", ()=>{
@@ -860,25 +860,25 @@ function registerTests(w){
     const meta = w.eval("PROJECTION_DATASET_META");
     equal(meta.kind, "bundled");
     equal(meta.season, "2026-27");
-    equal(meta.updated, "2026-08-27");
+    equal(meta.updated, "2026-10-18");
     equal(meta.label, "2026–27 Projections");
   });
 
-  test("Bundled Yahoo refresh uses Aug 27 GP, ADP and season-derived rates", ()=>{
+  test("Bundled Yahoo refresh uses Oct 18 GP, ADP and season-derived rates", ()=>{
     const current = w.eval("dedupe(parsePool(RAW))");
     const byName = new Map(current.map(p=>[p.name,p]));
     const wemby = byName.get("Victor Wembanyama");
     const jokic = byName.get("Nikola Jokic");
     assert(wemby && jokic, "Expected Wembanyama and Jokic in refreshed projections");
-    approx(wemby.adp, 2.3);
+    approx(wemby.adp, 2.0);
     equal(wemby.gp, 68);
     approx(wemby.pts * wemby.gp, 1750, 0.01);
     approx(wemby.blk * wemby.gp, 230, 0.01);
     approx(wemby.fgm / wemby.fga, .519, 0.00005);
-    approx(jokic.adp, 4.1);
-    approx(jokic.pts * jokic.gp, 1975, 0.01);
+    approx(jokic.adp, 1.4);
+    approx(jokic.pts * jokic.gp, 1978, 0.01);
     approx(jokic.ast * jokic.gp, 717, 0.01);
-    approx(jokic.fgm / jokic.fga, .573, 0.00005);
+    approx(jokic.fgm / jokic.fga, .574, 0.00005);
   });
 
   test("Historical dataset exposes source and data-through metadata", ()=>{
@@ -890,8 +890,8 @@ function registerTests(w){
   });
 
   test("Bundled projection summary includes label, player count and updated date", ()=>{
-    const summary = w.eval("projectionDatasetSummary(projectionDatasetMeta('', 500))");
-    equal(summary, "2026–27 Projections · 500 players · Updated Aug 27, 2026");
+    const summary = w.eval("projectionDatasetSummary(projectionDatasetMeta('', 400))");
+    equal(summary, "2026–27 Projections · 400 players · Updated Oct 18, 2026");
   });
 
   test("Custom projection imports are clearly distinguished from bundled data", ()=>{
@@ -1162,7 +1162,7 @@ function registerTests(w){
       const text = intro.textContent.replace(/\s+/g," ").trim();
       assert(text.includes("First-time setup"), "Expected standalone first-time setup label");
       assert(text.includes("league size") && text.includes("draft slot"), "Expected league size and draft slot guidance");
-      assert(text.includes("500-player 2026–27 projection pool"), "Expected bundled projection-pool guidance");
+      assert(text.includes("400-player 2026–27 projection pool"), "Expected bundled projection-pool guidance");
       assert(text.includes("replace it anytime"), "Expected custom-projection guidance");
       equal(w.document.getElementById("s_save").textContent, "Save and continue");
     } finally {
@@ -1174,7 +1174,7 @@ function registerTests(w){
   test("Quick start is standalone and accurately explains the bundled projection pool", ()=>{
     const text = w.document.getElementById("helpmask").textContent.replace(/\s+/g," ").trim();
     assert(!text.includes("Step 2 of 2"), "Quick start should not pretend to be a second step when reopened from the menu");
-    assert(text.includes("500-player 2026–27 projection pool"), "Expected bundled projection-pool guidance");
+    assert(text.includes("400-player 2026–27 projection pool"), "Expected bundled projection-pool guidance");
     assert(text.includes("replace it anytime"), "Expected custom-projection guidance");
   });
 
